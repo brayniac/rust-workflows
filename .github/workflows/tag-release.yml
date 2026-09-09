@@ -57,9 +57,21 @@ jobs:
   tag-release:
     name: Tag release and bump dev version
     runs-on: ubuntu-latest
+    # Deliberately minimal, and NOT contents: write.
+    #
+    # Every write here authenticates with RELEASE_TOKEN, not GITHUB_TOKEN:
+    # checkout takes the PAT, so the tag and bump pushes use its credentials,
+    # and `gh pr create` runs with GH_TOKEN set to it. The job's own token needs
+    # nothing beyond read.
+    #
+    # This is also what lets a caller stay a bare `uses:` block. A called
+    # workflow may not request more than its caller holds, and a repository
+    # whose default workflow permissions are read-only grants
+    # `contents: read, pull-requests: none` — so requesting write here would
+    # force every caller to carry a permissions block, and would fail loudly
+    # for any that forgot.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       tagged: ${{ steps.tag.outputs.tagged }}

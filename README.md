@@ -38,6 +38,13 @@ jobs:
 `pull-requests: write` for `dev-bump: pr`). The default `GITHUB_TOKEN` will not
 work: it cannot trigger other workflows, so a tag it creates starts nothing.
 
+**The caller needs no `permissions:` block.** Every write in this workflow
+authenticates with `RELEASE_TOKEN`, so the job's own `GITHUB_TOKEN` only needs
+`contents: read` — which a repository grants by default even when its default
+workflow permissions are read-only. A called workflow may not request more than
+its caller holds, so a workflow that asked for `contents: write` here would fail
+validation in exactly those repositories, before running a single step.
+
 **Pin a tag, never a branch.** `@v1` means a change here is adopted when you
 choose. `@main` means every repository adopts it the moment it lands, which is
 the drift this exists to remove, only faster.
