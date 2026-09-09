@@ -42,10 +42,16 @@ on:
         description: '"true" when this run created a tag.'
         value: ${{ jobs.tag-release.outputs.tagged }}
 
-# The one place the release commit prefix is defined. Changing it here changes
-# it everywhere; changing it in a caller does nothing.
-env:
-  RELEASE_COMMIT_PREFIX: 'release: v'
+# The release commit forms, defined once. A caller cannot change these.
+#
+# Both `release: v1.2.3` and `release: prepare v1.2.3` are accepted, because
+# repositories arrived here using one or the other and forcing them to switch
+# in the same change that swaps the workflow couples two risky edits. The merge
+# commit form is accepted too, so a repository that does not squash-merge its
+# release PR still tags.
+#
+# Breadth here is safe because the gate does not stop at the prefix: the version
+# named in the commit must equal the version in the manifest.
 
 jobs:
   tag-release:
@@ -60,26 +66,32 @@ jobs:
 
     steps:
       # Gate in a step, not in `if:`, so a skipped release says why in the log
-      # rather than vanishing from the run list.
-      - name: Decide whether this commit is a release
+      # rather than vanishing from the run list entirely.
+      #
+      # Values reach the script through env, never through `${{ }}` inside run:
+      # — a commit message is attacker-controlled text and interpolating it into
+      # the script is a shell injection.
+      - name: Is this a release commit?
         id: gate
-        # Values reach the script through env, never through `${{ }}` inside
-        # run: — a commit message is attacker-controlled text and interpolating
-        # it into the script is a shell injection.
         env:
           MSG: ${{ github.event.head_commit.message }}
           ONLY: ${{ inputs.only-repository }}
           REPO: ${{ github.repository }}
         run: |
           if [ -n "$ONLY" ] && [ "$ONLY" != "$REPO" ]; then
-            echo "not ${ONLY}; this is ${REPO}. Nothing to do."
+            echo "Release is gated to ${ONLY}; this is ${REPO}. Nothing to do."
             echo "proceed=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          case "$MSG" in
-            "$RELEASE_COMMIT_PREFIX"*) echo "proceed=true" >> "$GITHUB_OUTPUT" ;;
-            *) echo "head commit does not start with '${RELEASE_COMMIT_PREFIX}'. Nothing to do."
-               echo "proceed=false" >> "$GITHUB_OUTPUT" ;;
-          esac
+          # Cheap pre-check so an ordinary push does not pay for a checkout.
+          # The authoritative check is "Verify the commit names this version".
+          if printf '%s' "$MSG" | head -1 | grep -qE '^release: (prepare )?v?[0-9]' \
+             || printf '%s' "$MSG" | grep -q 'release/v'; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Head commit is not a release commit. Nothing to do."
+            echo "  $(printf '%s' "$MSG" | head -1)"
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/checkout@v5
         if: steps.gate.outputs.proceed == 'true'
@@ -112,6 +124,26 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Detected version: $VERSION"
+
+      # The check that can actually fail. A release PR whose title was edited, or
+      # rebased onto a different bump, produces a commit that passes the prefix
+      # pre-check while naming a version the manifest does not hold — which
+      # would otherwise tag whatever the manifest happens to say.
+      - name: Verify the commit names this version
+        if: steps.gate.outputs.proceed == 'true'
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          ESC=${VERSION//./\\.}
+          if printf '%s' "$MSG" | head -1 | grep -qE "^release: (prepare )?v${ESC}([^0-9.]|$)" \
+             || printf '%s' "$MSG" | grep -qE "release/v${ESC}([^0-9.]|$)"; then
+            echo "Commit names v${VERSION}, matching ${{ inputs.version-manifest }}."
+          else
+            echo "::error::release commit does not name the manifest version ${VERSION}"
+            printf '::error::head commit: %s\n' "$(printf '%s' "$MSG" | head -1)"
+            exit 1
+          fi
 
       - name: Create and push tag
         id: tag

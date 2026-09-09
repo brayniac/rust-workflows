@@ -13,9 +13,9 @@ Tags a release when a release-preparation commit lands on `main`, then opens or
 pushes the next development version bump.
 
 The flow it completes: a release PR bumps the version and updates the changelog,
-its commit message starts with `release: v`, and merging it triggers this
-workflow to create the tag. Anything that builds artifacts or publishes runs
-afterward, from the tag.
+its commit message names the new version, and merging it triggers this workflow
+to create the tag. Anything that builds artifacts or publishes runs afterward,
+from the tag.
 
 ### Use it
 
@@ -63,9 +63,14 @@ the drift this exists to remove, only faster.
 These are the differences that accumulated across repositories while each kept
 its own copy. None of them was a decision, so none of them is an input.
 
-- **The release commit prefix is `release: v`.** A prefix that does not match
-  what the workflow watches for produces a release PR that merges cleanly,
-  reports success, and never tags.
+- **Which commits count as releases.** `release: v1.2.3` and
+  `release: prepare v1.2.3` are both accepted, as is a merge commit referencing
+  `release/v1.2.3`, so a repository adopting this workflow does not have to
+  change its release commit convention in the same change.
+- **The commit must name the version the manifest holds.** This is the check
+  that can fail. A release PR whose title was edited, or rebased onto a
+  different bump, otherwise passes a prefix test while tagging whatever the
+  manifest happens to say.
 - **Version extraction is section-aware,** so a `version` key under
   `[dependencies]` cannot be mistaken for the package's.
 - **The dev bump runs `cargo release version`,** which updates every manifest
