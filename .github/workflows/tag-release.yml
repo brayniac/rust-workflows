@@ -34,6 +34,25 @@ on:
           a fork's main does not tag. Empty means run anywhere.
         type: string
         default: ''
+      dev-bump-package:
+        description: >-
+          Restrict the dev bump to one workspace member, passed to
+          `cargo release version` as `-p <name>`. Set it when version-manifest
+          names one member of a workspace whose other members version on their
+          own cadence; bumping the whole workspace there would reset them to
+          the product's version, and refuse outright where that is a downgrade.
+          Empty bumps every member sharing the version.
+        type: string
+        default: ''
+      dev-bump-style:
+        description: >-
+          Shape of the next development version. "alpha" is
+          MAJOR.MINOR.(PATCH+1)-alpha.0. "patch" is the bare
+          MAJOR.MINOR.(PATCH+1), for a repository whose next release finalizes
+          the version in place, or whose path dependencies carry caret
+          requirements (`version = "0.6"`) that a prerelease does not satisfy.
+        type: string
+        default: alpha
     outputs:
       version:
         description: The version that was released.
@@ -179,18 +198,31 @@ jobs:
         if: steps.tag.outputs.tagged == 'true' && inputs.dev-bump != 'none'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          STYLE: ${{ inputs.dev-bump-style }}
+          PACKAGE: ${{ inputs.dev-bump-package }}
         run: |
           cargo install cargo-release --locked
           VERSION='${{ steps.version.outputs.version }}'
           BASE=${VERSION%%-*}                       # drop any existing prerelease
           IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
-          NEXT_DEV="${MAJOR}.${MINOR}.$((PATCH + 1))-alpha.0"
+          case "$STYLE" in
+            alpha) NEXT_DEV="${MAJOR}.${MINOR}.$((PATCH + 1))-alpha.0" ;;
+            patch) NEXT_DEV="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+            *)
+              echo "::error::dev-bump-style must be \"alpha\" or \"patch\", got \"${STYLE}\""
+              exit 1 ;;
+          esac
           echo "Next development version: $NEXT_DEV"
 
           # cargo-release edits every manifest that shares the version and
           # updates Cargo.lock. A `sed` on one file leaves a workspace
-          # inconsistent and Cargo.lock stale.
-          cargo release version "$NEXT_DEV" --execute --no-confirm
+          # inconsistent and Cargo.lock stale. With dev-bump-package it edits
+          # that one member's manifest and still refreshes Cargo.lock.
+          if [ -n "$PACKAGE" ]; then
+            cargo release version "$NEXT_DEV" --execute --no-confirm -p "$PACKAGE"
+          else
+            cargo release version "$NEXT_DEV" --execute --no-confirm
+          fi
 
           if [ "${{ inputs.dev-bump }}" = "direct" ]; then
             git add -A

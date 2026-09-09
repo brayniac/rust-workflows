@@ -57,6 +57,8 @@ the drift this exists to remove, only faster.
 | `tag-prefix` | `v` | your tags are not `vX.Y.Z` |
 | `dev-bump` | `pr` | `direct` to push the bump straight to `main`; `none` to bump by hand |
 | `only-repository` | *(empty)* | the repository is forked and a fork's `main` must not tag — e.g. `iopsystems/rezolus` |
+| `dev-bump-package` | *(empty)* | `version-manifest` is one member of a workspace whose other members version on their own cadence — the bump is then `cargo release version -p <name>` and touches only that manifest and `Cargo.lock` |
+| `dev-bump-style` | `alpha` | `patch` for a bare `MAJOR.MINOR.(PATCH+1)`, where the next release finalizes the version in place or path dependencies carry caret requirements a prerelease would not satisfy |
 
 ### Outputs
 
@@ -84,7 +86,9 @@ its own copy. None of them was a decision, so none of them is an input.
   sharing the version and refreshes `Cargo.lock`. Editing one manifest leaves a
   workspace inconsistent and the lockfile stale.
 - **The next development version is `MAJOR.MINOR.(PATCH+1)-alpha.0`,** with any
-  existing prerelease suffix dropped first.
+  existing prerelease suffix dropped first — or the bare `MAJOR.MINOR.(PATCH+1)`
+  under `dev-bump-style: patch`. Either way the shape is the workflow's, not a
+  hand-edit's.
 - **The release check is a step, not a job-level `if:`.** A job that never runs
   leaves no trace, so a release that failed to tag and a commit that was never a
   release look identical afterward. As a step, the run exists and the log says
@@ -95,6 +99,13 @@ its own copy. None of them was a decision, so none of them is an input.
 A workspace whose crates are versioned and tagged independently — tags like
 `<crate>-v1.2.3` — releases one crate at a time in dependency order. One shared
 version is the wrong model for it, and this workflow does not try to serve it.
+
+A hybrid workspace — a product tagged `v1.2.3` alongside satellite crates that
+release on their own cadence — fits for the product's releases: point
+`version-manifest` at the product's manifest and set `dev-bump-package` to it,
+so the dev bump does not drag the satellites to the product's version. The
+satellites' own releases are outside this workflow; tag them by hand, and let
+the repository's publish workflow act on the tag.
 
 ## Versioning
 
