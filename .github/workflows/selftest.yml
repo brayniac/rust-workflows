@@ -1,0 +1,25 @@
+# Calls tag-release.yml exactly as a consuming repository does, so that the
+# caller contract is exercised on every push here rather than discovered at
+# someone else's merge.
+#
+# This repository's default workflow permissions are `read`, which is the
+# condition that matters: a called workflow may not request more than its
+# caller holds, so a tag-release.yml that asked for `contents: write` fails
+# validation here before running a step — the same way it would in a consuming
+# repository.
+#
+# There is no Cargo.toml here and no RELEASE_TOKEN, and neither is needed: an
+# ordinary commit stops at the gate step, which is the step being tested. The
+# expected result is a green run whose log reads "Head commit is not a release
+# commit."
+
+name: Self-test
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  tag-release:
+    uses: brayniac/rust-workflows/.github/workflows/tag-release.yml@v1
+    secrets: inherit
