@@ -29,14 +29,22 @@ on:
 jobs:
   tag-release:
     uses: brayniac/rust-workflows/.github/workflows/tag-release.yml@v1
-    secrets: inherit
+    secrets:
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
     with:
       dev-bump: pr
 ```
 
-`secrets: inherit` passes `RELEASE_TOKEN`, a PAT with `contents: write` (and
-`pull-requests: write` for `dev-bump: pr`). The default `GITHUB_TOKEN` will not
-work: it cannot trigger other workflows, so a tag it creates starts nothing.
+`RELEASE_TOKEN` is a PAT with `contents: write` (and `pull-requests: write`
+for `dev-bump: pr`). The default `GITHUB_TOKEN` will not work: it cannot
+trigger other workflows, so a tag it creates starts nothing.
+
+**Pass the secret by name, not with `secrets: inherit`.** GitHub carries
+inherited secrets only between repositories in the same organization or
+enterprise. A caller in any other organization that writes `secrets: inherit`
+passes validation, passes the gate, and then fails at checkout with `Input
+required and not supplied: token` — the release commit is on `main` and no tag
+exists. The explicit form works from anywhere.
 
 **The caller needs no `permissions:` block.** Every write in this workflow
 authenticates with `RELEASE_TOKEN`, so the job's own `GITHUB_TOKEN` only needs

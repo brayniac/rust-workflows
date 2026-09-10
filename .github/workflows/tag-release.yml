@@ -53,6 +53,17 @@ on:
           requirements (`version = "0.6"`) that a prerelease does not satisfy.
         type: string
         default: alpha
+    secrets:
+      RELEASE_TOKEN:
+        description: >-
+          A PAT with `contents: write` (and `pull-requests: write` when
+          dev-bump is "pr"). Declared so a caller in ANOTHER organization can
+          pass it by name: `secrets: inherit` only carries secrets between
+          repositories in the same organization or enterprise, and a caller
+          elsewhere that relies on it reaches checkout with an empty token
+          (ringline-rs/ringline, 2026-09-09). Callers in this organization may
+          still use `secrets: inherit`.
+        required: true
     outputs:
       version:
         description: The version that was released.
@@ -122,6 +133,20 @@ jobs:
             echo "Head commit is not a release commit. Nothing to do."
             echo "  $(printf '%s' "$MSG" | head -1)"
             echo "proceed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Fail here with the cause rather than inside actions/checkout, whose
+      # message for an empty token ("Input required and not supplied: token")
+      # does not say which secret, or that `secrets: inherit` does not cross
+      # an organization boundary.
+      - name: Verify RELEASE_TOKEN reached this workflow
+        if: steps.gate.outputs.proceed == 'true'
+        env:
+          TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::RELEASE_TOKEN is empty. Set it as a repository secret and pass it by name under the caller's 'secrets:' key (see README). 'secrets: inherit' only carries it when the caller is in the same organization as this workflow."
+            exit 1
           fi
 
       - uses: actions/checkout@v5
