@@ -44,6 +44,23 @@ on:
           Empty bumps every member sharing the version.
         type: string
         default: ''
+      dev-bump-automerge:
+        description: >-
+          Merge method to enable auto-merge with on the bump PR, or empty to
+          leave it for a human. One of "squash", "merge", "rebase". Only
+          meaningful with dev-bump "pr".
+
+          It exists for a repository whose main branch requires pull requests,
+          where "direct" cannot push and an unmerged bump PR is worse than the
+          ceremony it saves: main sits at the released version, so the next
+          branch starts from a version already published.
+
+          The repository must allow auto-merge, and the named merge method must
+          be one it allows. The PR still waits for its required checks, which is
+          the point -- the bump is the one commit that edits Cargo.toml and
+          Cargo.lock without anyone reading it.
+        type: string
+        default: ''
       dev-bump-style:
         description: >-
           Shape of the next development version. "alpha" is
@@ -259,10 +276,33 @@ jobs:
             git add -A
             git commit -m "chore: begin next development iteration (${NEXT_DEV})"
             git push origin "$BRANCH"
-            gh pr create \
+            PR_URL=$(gh pr create \
               --title "chore: begin next development iteration (${NEXT_DEV})" \
               --body "Automated version bump after ${{ inputs.tag-prefix }}${VERSION}." \
-              --head "$BRANCH" --base main
+              --head "$BRANCH" --base main)
+            echo "Opened $PR_URL"
+
+            AUTOMERGE='${{ inputs.dev-bump-automerge }}'
+            case "$AUTOMERGE" in
+              '') ;;
+              squash|merge|rebase)
+                # Failing here rather than warning. The tag is pushed and the
+                # PR is open, so nothing is broken and the recovery is to merge
+                # it by hand -- but an automation that was asked for and did not
+                # happen must not pass quietly, or the bump sits unmerged and
+                # main keeps the released version. The usual cause is
+                # auto-merge not being allowed on the repository.
+                if ! gh pr merge "$PR_URL" --auto "--$AUTOMERGE"; then
+                  echo "::error::could not enable auto-merge (--$AUTOMERGE) on $PR_URL."
+                  echo "::error::The tag and the PR are fine; merge the PR to finish."
+                  echo "::error::Check that the repository allows auto-merge and this merge method."
+                  exit 1
+                fi
+                echo "Auto-merge enabled (--$AUTOMERGE); it lands when required checks pass." ;;
+              *)
+                echo "::error::dev-bump-automerge must be empty, \"squash\", \"merge\" or \"rebase\", got \"$AUTOMERGE\""
+                exit 1 ;;
+            esac
           fi
 
       - name: Summary
@@ -273,6 +313,9 @@ jobs:
             if [ "${{ steps.tag.outputs.tagged }}" = "true" ]; then
               echo "- Created tag \`${{ inputs.tag-prefix }}${{ steps.version.outputs.version }}\`"
               echo "- Next dev version landed via \`${{ inputs.dev-bump }}\`"
+              if [ -n "${{ inputs.dev-bump-automerge }}" ]; then
+                echo "- Bump PR set to auto-merge (\`${{ inputs.dev-bump-automerge }}\`)"
+              fi
             else
               echo "- No tag created (already existed, or the run stopped earlier)."
             fi
