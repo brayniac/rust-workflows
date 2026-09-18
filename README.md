@@ -67,6 +67,19 @@ the drift this exists to remove, only faster.
 | `only-repository` | *(empty)* | the repository is forked and a fork's `main` must not tag — e.g. `iopsystems/rezolus` |
 | `dev-bump-package` | *(empty)* | `version-manifest` is one member of a workspace whose other members version on their own cadence — the bump is then `cargo release version -p <name>` and touches only that manifest and `Cargo.lock` |
 | `dev-bump-style` | `alpha` | `patch` for a bare `MAJOR.MINOR.(PATCH+1)`, where the next release finalizes the version in place or path dependencies carry caret requirements a prerelease would not satisfy |
+| `dev-bump-automerge` | *(empty)* | `main` requires pull requests, so `direct` cannot push — `squash`, `merge` or `rebase` enables auto-merge on the bump PR, which lands it once its required checks pass. The repository must allow auto-merge and that method |
+
+A branch that requires pull requests is the case `dev-bump-automerge` exists
+for. `direct` cannot push to such a branch without a bypass, and a bypass wide
+enough for the release token is usually wide enough for a person — so the rule
+stops applying to the people it was written for. With `pr` plus auto-merge the
+bump goes through the same gate as everything else, and the one commit that
+edits `Cargo.toml` and `Cargo.lock` unread gets its checks run.
+
+Left unmerged, that PR is worse than the ceremony it saves: `main` keeps the
+released version, so the next branch starts from a version already published.
+That is why a requested auto-merge that cannot be enabled fails the job rather
+than warning.
 
 ### Outputs
 
