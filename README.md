@@ -106,11 +106,13 @@ its own copy. None of them was a decision, so none of them is an input.
 - **The dev bump runs `cargo release version`,** which updates every manifest
   sharing the version and refreshes `Cargo.lock`. Editing one manifest leaves a
   workspace inconsistent and the lockfile stale.
-- **The next development version is `MAJOR.MINOR.(PATCH+1)-alpha.0`,** with any
-  existing prerelease suffix dropped first — or `MAJOR.(MINOR+1).0-alpha.0`
-  under `dev-bump-style: minor-alpha`, or the bare `MAJOR.MINOR.(PATCH+1)` under
-  `dev-bump-style: patch`. Either way the shape is the workflow's, not a
-  hand-edit's.
+- **The next development version is computed from the released version with
+  any prerelease suffix dropped:** `MAJOR.MINOR.(PATCH+1)-alpha.0` by default,
+  `MAJOR.(MINOR+1).0-alpha.0` under `dev-bump-style: minor-alpha`, or
+  `MAJOR.MINOR.(PATCH+1)` under `dev-bump-style: patch`. In each case the shape
+  is the workflow's, not a hand-edit's. The bump lands on `main` whichever
+  branch was tagged, so a caller that also runs on a maintenance branch sets
+  `dev-bump: none` there, as `iopsystems/rezolus` does.
 - **The release check is a step, not a job-level `if:`.** A job that never runs
   leaves no trace, so a release that failed to tag and a commit that was never a
   release look identical afterward. As a step, the run exists and the log says

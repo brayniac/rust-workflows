@@ -70,7 +70,9 @@ on:
           branches. "patch" is the bare MAJOR.MINOR.(PATCH+1), for a
           repository whose next release finalizes the version in place, or
           whose path dependencies carry caret requirements (`version = "0.6"`)
-          that a prerelease does not satisfy.
+          that a prerelease does not satisfy. Each style assumes the release
+          was final: releasing 0.7.0-alpha.3 under "minor-alpha" bumps to
+          0.8.0-alpha.0.
         type: string
         default: alpha
     secrets:
