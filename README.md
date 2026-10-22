@@ -66,7 +66,7 @@ the drift this exists to remove, only faster.
 | `dev-bump` | `pr` | `direct` to push the bump straight to `main`; `none` to bump by hand |
 | `only-repository` | *(empty)* | the repository is forked and a fork's `main` must not tag — e.g. `iopsystems/rezolus` |
 | `dev-bump-package` | *(empty)* | `version-manifest` is one member of a workspace whose other members version on their own cadence — the bump is then `cargo release version -p <name>` and touches only that manifest and `Cargo.lock` |
-| `dev-bump-style` | `alpha` | `patch` for a bare `MAJOR.MINOR.(PATCH+1)`, where the next release finalizes the version in place or path dependencies carry caret requirements a prerelease would not satisfy |
+| `dev-bump-style` | `alpha` | `minor-alpha` for `MAJOR.(MINOR+1).0-alpha.0`, where `main` carries the next minor as a prerelease and patch releases come from maintenance branches; `patch` for a bare `MAJOR.MINOR.(PATCH+1)`, where the next release finalizes the version in place or path dependencies carry caret requirements a prerelease would not satisfy |
 | `dev-bump-automerge` | *(empty)* | `main` requires pull requests, so `direct` cannot push — `squash`, `merge` or `rebase` enables auto-merge on the bump PR, which lands it once its required checks pass. The repository must allow auto-merge and that method |
 
 A branch that requires pull requests is the case `dev-bump-automerge` exists
@@ -106,10 +106,15 @@ its own copy. None of them was a decision, so none of them is an input.
 - **The dev bump runs `cargo release version`,** which updates every manifest
   sharing the version and refreshes `Cargo.lock`. Editing one manifest leaves a
   workspace inconsistent and the lockfile stale.
-- **The next development version is `MAJOR.MINOR.(PATCH+1)-alpha.0`,** with any
-  existing prerelease suffix dropped first — or the bare `MAJOR.MINOR.(PATCH+1)`
-  under `dev-bump-style: patch`. Either way the shape is the workflow's, not a
-  hand-edit's.
+- **The next development version is computed from the released version with
+  any prerelease suffix dropped:** `MAJOR.MINOR.(PATCH+1)-alpha.0` by default,
+  `MAJOR.(MINOR+1).0-alpha.0` under `dev-bump-style: minor-alpha`, or
+  `MAJOR.MINOR.(PATCH+1)` under `dev-bump-style: patch`. In each case the shape
+  is the workflow's, not a hand-edit's. The bump targets `main` whichever
+  branch was tagged. Under `pr` it opens a PR from the tagged branch into
+  `main`; under `direct` it fails, because the push names `main`. A caller that
+  also runs on a maintenance branch sets `dev-bump: none` there, as
+  `iopsystems/rezolus` does.
 - **The release check is a step, not a job-level `if:`.** A job that never runs
   leaves no trace, so a release that failed to tag and a commit that was never a
   release look identical afterward. As a step, the run exists and the log says
